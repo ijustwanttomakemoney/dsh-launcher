@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>DSH Harness Launcher</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14181d;
+    --line: #242a32;
+    --text: #e8ecf1;
+    --muted: #8b97a6;
+    --accent: #4b8bff;
+    --ok: #35c98a;
+    --warn: #f0b132;
+    --bad: #f0596b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  main { width: 100%; max-width: 520px; }
+  h1 { font-size: 19px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px; margin-bottom: 14px;
+  }
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.up { background: var(--ok); box-shadow: 0 0 0 3px rgba(53,201,138,.15); }
+  .dot.down { background: var(--bad); box-shadow: 0 0 0 3px rgba(240,89,107,.15); }
+  .dot.checking { background: var(--warn); }
+  .status { font-size: 13px; color: var(--muted); }
+  .host {
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--text); word-break: break-all; margin-bottom: 14px;
+  }
+  a.launch {
+    display: block; text-align: center; text-decoration: none;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 15px;
+    padding: 13px 16px; border-radius: 9px;
+  }
+  a.launch:hover { filter: brightness(1.08); }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  input {
+    width: 100%; background: #0e1216; border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 10px 11px; font: 13px ui-monospace, Menlo, monospace;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .btn {
+    display: block; width: 100%; margin-top: 12px; cursor: pointer;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 14px;
+    border: 0; border-radius: 9px; padding: 12px 16px;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .hint code { color: #b9c4d2; }
+  button.link {
+    background: none; border: 0; color: var(--muted); font-size: 12px;
+    text-decoration: underline; cursor: pointer; padding: 0; margin-top: 10px;
+    display: block;
+  }
+  .msg { font-size: 12.5px; margin: 10px 0 0; min-height: 1em; }
+  .msg.bad { color: var(--bad); }
+  .msg.warn { color: var(--warn); }
+  .stale { color: var(--warn); font-size: 12px; margin: 10px 0 0; display: none; }
+  [hidden] { display: none !important; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>DSH Harness Launcher</h1>
+  <p class="sub">Points at the live ngrok tunnel for this machine's harness.</p>
+
+  <!-- ── locked ─────────────────────────────────────────────────────────── -->
+  <section class="panel" id="locked">
+    <label for="pass">Passphrase</label>
+    <input id="pass" type="password" placeholder="unlock the tunnel URL" autocomplete="off" spellcheck="false">
+    <button class="btn" id="unlock" type="button">Unlock</button>
+    <p class="msg" id="lockmsg"></p>
+    <p class="hint">
+      The tunnel URL is stored in this public page as AES-GCM ciphertext, so it is
+      unreadable without the passphrase. It is remembered on this device only.
+    </p>
+  </section>
+
+  <!-- ── unlocked ───────────────────────────────────────────────────────── -->
+  <section id="unlocked" hidden>
+    <div class="panel">
+      <div class="row">
+        <span class="dot checking" id="dot"></span>
+        <span class="status" id="status">Checking tunnel…</span>
+      </div>
+      <div class="host" id="host">—</div>
+      <a class="launch" id="launch" href="#">Open harness</a>
+      <p class="stale" id="stale"></p>
+    </div>
+
+    <div class="panel">
+      <label for="token">Access token <span style="opacity:.7">(optional, stored only in this browser)</span></label>
+      <input id="token" type="password" placeholder="paste the ?token= value" autocomplete="off" spellcheck="false">
+      <p class="hint">
+        Sent as <code>?token=…</code> once; the server then sets a 30-day cookie.
+        Never committed to git. Find it in <code>logs/dsh-web.log</code>.
+      </p>
+      <button class="link" id="forget" type="button">Forget token on this device</button>
+      <button class="link" id="relock" type="button">Lock launcher (forget passphrase)</button>
+    </div>
+
+    <footer id="updated">—</footer>
+  </section>
+
+  <!-- Encrypted payload. Regenerated by sync-url.sh; contains no plaintext. -->
+  <script id="dsh-secret" type="application/json">{"v":1,"iter":600000,"salt":"IIA90Tfd2c8ULSQyRuS69A==","iv":"HZBwfe4zyovsslpi","ct":"oeAO3yoZ8gvt6Zd/xHYZFJrH08SmM4AwYFxCijPDM41lk2/nslRVluVLDVDQM/xaydYOfJEQa7iIED1jKpKNGMoyd8sqkgkQ5meoyBl7hhvIs2sLzTceKUFq3x9OuQpPcm5OZpm4jCgL","updated":"2026-10-06T14:11:39Z"}</script>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var SECRET = JSON.parse(document.getElementById("dsh-secret").textContent);
+  var PASS_KEY = "dsh-launcher-pass";
+  var TOKEN_KEY = "dsh-launcher-token";
+
+  var lockedEl = document.getElementById("locked");
+  var unlockedEl = document.getElementById("unlocked");
+  var passEl = document.getElementById("pass");
+  var lockMsg = document.getElementById("lockmsg");
+  var dot = document.getElementById("dot");
+  var status = document.getElementById("status");
+  var host = document.getElementById("host");
+  var launch = document.getElementById("launch");
+  var stale = document.getElementById("stale");
+  var tokenEl = document.getElementById("token");
+  var updated = document.getElementById("updated");
+
+  var base = "";
+  var plainUpdated = "";
+
+  function store(key, value) {
+    try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key); } catch (e) {}
+  }
+  function read(key) {
+    try { return localStorage.getItem(key) || ""; } catch (e) { return ""; }
+  }
+  function b64ToBytes(b64) {
+    var bin = atob(b64), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function deriveKey(passphrase, salt, iterations) {
+    var enc = new TextEncoder();
+    return crypto.subtle
+      .importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"])
+      .then(function (material) {
+        return crypto.subtle.deriveKey(
+          { name: "PBKDF2", salt: salt, iterations: iterations, hash: "SHA-256" },
+          material,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["decrypt"]
+        );
+      });
+  }
+
+  function decrypt(passphrase) {
+    if (!SECRET.ct) return Promise.reject(new Error("no-payload"));
+    return deriveKey(passphrase, b64ToBytes(SECRET.salt), SECRET.iter || 600000)
+      .then(function (key) {
+        return crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: b64ToBytes(SECRET.iv) },
+          key,
+          b64ToBytes(SECRET.ct)
+        );
+      })
+      .then(function (plain) {
+        return JSON.parse(new TextDecoder().decode(plain));
+      });
+  }
+
+  function paint() {
+    if (!base) return;
+    host.textContent = base.replace(/^https?:\/\//, "");
+    launch.href = read(TOKEN_KEY)
+      ? base + "/?token=" + encodeURIComponent(read(TOKEN_KEY))
+      : base + "/";
+
+    var stamp = plainUpdated || SECRET.updated;
+    var age = stamp ? (Date.now() - new Date(stamp).getTime()) / 36e5 : NaN;
+    if (isFinite(age) && age > 24) {
+      stale.style.display = "block";
+      stale.textContent =
+        "URL last refreshed " + Math.floor(age) +
+        "h ago — ngrok rotates it on restart. Re-run sync-url.sh if this 404s or 502s.";
+    }
+    updated.textContent = stamp ? "tunnel URL captured " + new Date(stamp).toLocaleString() : "";
+  }
+
+  function probe() {
+    if (!base) return;
+    // The gate answers 401 and no-cors yields an opaque response, so any settled
+    // response means the tunnel is alive; only a network error means it is down.
+    var done = false;
+    var timer = setTimeout(function () {
+      if (done) return; done = true;
+      dot.className = "dot down";
+      status.textContent = "Tunnel not responding (timed out)";
+    }, 8000);
+
+    fetch(base + "/", { mode: "no-cors", cache: "no-store" })
+      .then(function () {
+        if (done) return; done = true; clearTimeout(timer);
+        dot.className = "dot up";
+        status.textContent = "Tunnel reachable";
+      })
+      .catch(function () {
+        if (done) return; done = true; clearTimeout(timer);
+        dot.className = "dot down";
+        status.textContent = "Tunnel not responding — is ngrok running?";
+      });
+  }
+
+  function unlock(passphrase, remember) {
+    lockMsg.className = "msg";
+    lockMsg.textContent = "Decrypting…";
+    return decrypt(passphrase).then(
+      function (payload) {
+        base = (payload.url || "").replace(/\/+$/, "");
+        plainUpdated = payload.updated || "";
+        if (remember) store(PASS_KEY, passphrase);
+        lockedEl.hidden = true;
+        unlockedEl.hidden = false;
+        lockMsg.textContent = "";
+        passEl.value = "";
+        tokenEl.value = read(TOKEN_KEY);
+        paint();
+        probe();
+      },
+      function (error) {
+        if (error && error.message === "no-payload") {
+          lockMsg.className = "msg warn";
+          lockMsg.textContent = "No tunnel URL has been published yet. Run sync-url.sh --push.";
+        } else {
+          lockMsg.className = "msg bad";
+          lockMsg.textContent = "Wrong passphrase.";
+        }
+        store(PASS_KEY, "");
+      }
+    );
+  }
+
+  document.getElementById("unlock").addEventListener("click", function () {
+    if (!passEl.value) {
+      lockMsg.className = "msg bad";
+      lockMsg.textContent = "Enter the passphrase.";
+      return;
+    }
+    unlock(passEl.value, true);
+  });
+  passEl.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") document.getElementById("unlock").click();
+  });
+
+  tokenEl.addEventListener("input", function () {
+    store(TOKEN_KEY, tokenEl.value);
+    paint();
+  });
+  document.getElementById("forget").addEventListener("click", function () {
+    store(TOKEN_KEY, "");
+    tokenEl.value = "";
+    paint();
+  });
+  document.getElementById("relock").addEventListener("click", function () {
+    store(PASS_KEY, "");
+    base = "";
+    unlockedEl.hidden = true;
+    lockedEl.hidden = false;
+    passEl.focus();
+  });
+
+  // Auto-unlock when this device already knows the passphrase.
+  var saved = read(PASS_KEY);
+  if (saved) {
+    unlock(saved, false);
+  } else if (!SECRET.ct) {
+    lockMsg.className = "msg warn";
+    lockMsg.textContent = "No tunnel URL has been published yet. Run sync-url.sh --push.";
+  }
+})();
+</script>
+</body>
+</html>

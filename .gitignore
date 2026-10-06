@@ -1,0 +1,17 @@
+# OS / editor noise
+.DS_Store
+*.swp
+*~
+
+# Plaintext tunnel URL and passphrase: local only, never published.
+# index.html carries the AES-GCM ciphertext instead.
+url.json
+.passphrase
+_test_*.html
+
+# Never commit anything credential-bearing
+*.secret
+*.token
+*credentials*
+*authtoken*
+ngrok.yml
